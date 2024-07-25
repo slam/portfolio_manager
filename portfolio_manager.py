@@ -70,6 +70,14 @@ class PortfolioManager:
     def generate_sell_orders(self):
         logger.debug("Generating sell orders...")
         sell_orders = []
+
+        # Sell investments no longer in portfolio weights
+        for ticker in self.current_state:
+            if ticker not in self.portfolio_weights:
+                current_shares = sum(self.current_state[ticker].values())
+                self.allocate_sell_orders(ticker, current_shares, sell_orders)
+
+        # Sell excess shares of remaining investments
         for ticker, weight in self.portfolio_weights.items():
             target_shares = self.target_state[ticker]
             current_shares = sum(self.current_state[ticker].values())
@@ -77,6 +85,7 @@ class PortfolioManager:
                 self.allocate_sell_orders(
                     ticker, current_shares - target_shares, sell_orders
                 )
+
         return sell_orders
 
     def execute_sell_orders(self, sell_orders):
@@ -187,43 +196,48 @@ class PortfolioManager:
                 f"Unable to allocate all shares for {ticker}. Remaining: {shares_to_buy}"
             )
 
-
     def combine_orders(self, orders):
         logger.debug("Combining orders...")
         logger.debug(f"Initial orders: {orders}")
-        
+
         sell_orders = []
         buy_orders = []
-        
+
         for order in orders:
-            if order['Action'] == 'sell':
+            if order["Action"] == "sell":
                 sell_orders.append(order)
             else:
                 buy_orders.append(order)
-        
+
         # Sort sell orders
         sell_orders = sorted(
             sell_orders,
             key=lambda x: (
-                -Decimal(self.portfolio_weights[x["Ticker"]]["Vol"]),  # Sort by volatility (descending)
+                -Decimal(
+                    self.portfolio_weights.get(x["Ticker"], {"Vol": "0"})["Vol"]
+                ),  # Sort by volatility (descending)
                 x["Ticker"],  # Then by ticker
-                self.accounts[x["Account"]]["Type"] == "Taxable",  # Tax-advantaged accounts first for same ticker
+                self.accounts[x["Account"]]["Type"]
+                == "Taxable",  # Tax-advantaged accounts first for same ticker
                 x["Account"],  # Then by account name
-            )
+            ),
         )
-        
+
         # Sort buy orders
         buy_orders = sorted(
             buy_orders,
             key=lambda x: (
-                -Decimal(self.portfolio_weights[x["Ticker"]]["Vol"]),  # Sort by volatility (descending)
+                -Decimal(
+                    self.portfolio_weights[x["Ticker"]]["Vol"]
+                ),  # Sort by volatility (descending)
                 x["Ticker"],  # Then by ticker
-                self.accounts[x["Account"]]["Type"] == "Taxable",  # Tax-advantaged accounts first for same ticker
+                self.accounts[x["Account"]]["Type"]
+                == "Taxable",  # Tax-advantaged accounts first for same ticker
                 x["Account"],  # Then by account name
-            )
+            ),
         )
-        
+
         combined_orders = sell_orders + buy_orders
-        
+
         logger.debug(f"Combined and sorted orders: {combined_orders}")
         return combined_orders
