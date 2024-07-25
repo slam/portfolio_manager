@@ -122,8 +122,10 @@ class PortfolioManager:
         logger.debug(
             f"Allocating sell orders for {ticker}, shares to sell: {shares_to_sell}"
         )
+        # Sort accounts to prioritize tax-advantaged accounts for selling
         sorted_accounts = sorted(
-            self.accounts.items(), key=lambda x: x[1]["Type"] == "Tax-Advantaged"
+            self.accounts.items(),
+            key=lambda x: (x[1]["Type"] != "Tax-Advantaged", x[0]),
         )
 
         for account_name, account in sorted_accounts:

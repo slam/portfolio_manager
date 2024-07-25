@@ -379,6 +379,69 @@ class TestPortfolioManager(unittest.TestCase):
         for expected, actual in zip(expected_allocations, result):
             self.assertEqual(expected, actual)
 
+    def test_prioritize_tax_advantaged_selling(self):
+        portfolio_weights = [
+            {
+                "Ticker": "VTI",
+                "Vol": "0.1",
+                "Cash_Weight": "0.4",
+                "Asset_Class": "Equity",
+                "Sub_Class": "US",
+            },
+            {
+                "Ticker": "VXUS",
+                "Vol": "0.12",
+                "Cash_Weight": "0.3",
+                "Asset_Class": "Equity",
+                "Sub_Class": "International",
+            },
+            {
+                "Ticker": "BND",
+                "Vol": "0.03",
+                "Cash_Weight": "0.3",
+                "Asset_Class": "Bond",
+                "Sub_Class": "US",
+            },
+        ]
+        accounts = [
+            {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "1000"},
+            {"Account": "IRA", "Type": "Tax-Advantaged", "Idle_Cash": "1000"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "300"},
+            {"Ticker": "VTI", "Account": "IRA", "Shares": "200"},
+            {"Ticker": "VXUS", "Account": "IRA", "Shares": "100"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": "50"},
+        ]
+
+        # Calculate total portfolio value:
+        # VTI: (300 + 200) * 100 = 50,000
+        # VXUS: 100 * 50 = 5,000
+        # BND: 50 * 80 = 4,000
+        # Idle cash: 1000 + 1000 = 2,000
+        # Total: 61,000
+
+        # Target allocation:
+        # VTI: 61,000 * 0.4 / 100 = 244 shares
+        # VXUS: 61,000 * 0.3 / 50 = 366 shares
+        # BND: 61,000 * 0.3 / 80 = 228.75 shares (round down to 228)
+
+        result = self.manager.rebalance(
+            portfolio_weights, accounts, current_allocations
+        )
+
+        expected_allocations = [
+            {"Ticker": "VTI", "Account": "IRA", "Shares": 200, "Action": "sell"},
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 56, "Action": "sell"},
+            {"Ticker": "VXUS", "Account": "IRA", "Shares": 266, "Action": "buy"},
+            {"Ticker": "BND", "Account": "IRA", "Shares": 96, "Action": "buy"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": 82, "Action": "buy"},
+        ]
+
+        self.assertEqual(len(result), len(expected_allocations))
+        for expected, actual in zip(expected_allocations, result):
+            self.assertEqual(expected, actual)
+
 
 if __name__ == "__main__":
     unittest.main()
