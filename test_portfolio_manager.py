@@ -132,7 +132,7 @@ class TestPortfolioManager(unittest.TestCase):
         expected_allocations = [
             {"Ticker": "BND", "Account": "Taxable", "Shares": 109, "Action": "sell"},
             {"Ticker": "VXUS", "Account": "IRA", "Shares": 60, "Action": "buy"},
-            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 46, "Action": "buy"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 145, "Action": "buy"},
             {"Ticker": "VTI", "Account": "Taxable", "Shares": 64, "Action": "buy"},
         ]
 
