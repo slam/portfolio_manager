@@ -186,10 +186,7 @@ class TestPortfolioManager(unittest.TestCase):
 
         self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
-            self.assertEqual(expected["Ticker"], actual["Ticker"])
-            self.assertEqual(expected["Account"], actual["Account"])
-            self.assertEqual(expected["Shares"], actual["Shares"])
-            self.assertEqual(expected["Action"], actual["Action"])
+            self.assertEqual(expected, actual)
 
     def test_adding_new_investment(self):
         portfolio_weights = [
@@ -258,10 +255,7 @@ class TestPortfolioManager(unittest.TestCase):
 
         self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
-            self.assertEqual(expected["Ticker"], actual["Ticker"])
-            self.assertEqual(expected["Account"], actual["Account"])
-            self.assertEqual(expected["Shares"], actual["Shares"])
-            self.assertEqual(expected["Action"], actual["Action"])
+            self.assertEqual(expected, actual)
 
     def test_volatility_and_account_types(self):
         portfolio_weights = [
@@ -299,7 +293,7 @@ class TestPortfolioManager(unittest.TestCase):
         #
         # VTI: 100000 * 0.3 / 100 = 300
         # ARKK: 100000 * 0.1 / 75 = 133
-        # BND: 100000 * 0.6 / 80 = 750 
+        # BND: 100000 * 0.6 / 80 = 750
 
         result = self.manager.rebalance(
             portfolio_weights, accounts, current_allocations
@@ -314,10 +308,7 @@ class TestPortfolioManager(unittest.TestCase):
 
         self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
-            self.assertEqual(expected["Ticker"], actual["Ticker"])
-            self.assertEqual(expected["Account"], actual["Account"])
-            self.assertEqual(expected["Shares"], actual["Shares"])
-            self.assertEqual(expected["Action"], actual["Action"])
+            self.assertEqual(expected, actual)
 
     def test_splitting_investments_across_accounts(self):
         portfolio_weights = [
@@ -342,22 +333,26 @@ class TestPortfolioManager(unittest.TestCase):
         ]
         current_allocations = []
 
+        # total value = 60000 + 40000 = 100000
+
+        # target allocation:
+        #
+        # VTI: 100000 * 0.8 / 100 = 800
+        # BND: 100000 * 0.2 / 80 = 250
+
         result = self.manager.rebalance(
             portfolio_weights, accounts, current_allocations
         )
 
         expected_allocations = [
-            {"Ticker": "VTI", "Account": "Taxable", "Shares": 480, "Action": "buy"},
-            {"Ticker": "VTI", "Account": "IRA", "Shares": 320, "Action": "buy"},
+            {"Ticker": "VTI", "Account": "IRA", "Shares": 400, "Action": "buy"},
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 400, "Action": "buy"},
             {"Ticker": "BND", "Account": "Taxable", "Shares": 250, "Action": "buy"},
         ]
 
         self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
-            self.assertEqual(expected["Ticker"], actual["Ticker"])
-            self.assertEqual(expected["Account"], actual["Account"])
-            self.assertEqual(expected["Shares"], actual["Shares"])
-            self.assertEqual(expected["Action"], actual["Action"])
+            self.assertEqual(expected, actual)
 
     def test_handling_idle_cash(self):
         portfolio_weights = [
@@ -381,10 +376,8 @@ class TestPortfolioManager(unittest.TestCase):
         ]
 
         self.assertEqual(len(result), len(expected_allocations))
-        self.assertEqual(expected_allocations[0]["Ticker"], result[0]["Ticker"])
-        self.assertEqual(expected_allocations[0]["Account"], result[0]["Account"])
-        self.assertEqual(expected_allocations[0]["Shares"], result[0]["Shares"])
-        self.assertEqual(expected_allocations[0]["Action"], result[0]["Action"])
+        for expected, actual in zip(expected_allocations, result):
+            self.assertEqual(expected, actual)
 
 
 if __name__ == "__main__":
