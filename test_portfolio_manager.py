@@ -184,7 +184,7 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "VTI", "Account": "Taxable", "Shares": 43, "Action": "buy"},
         ]
 
-        self.assertEqual(len(result), 3)
+        self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
             self.assertEqual(expected["Ticker"], actual["Ticker"])
             self.assertEqual(expected["Account"], actual["Account"])
@@ -227,23 +227,36 @@ class TestPortfolioManager(unittest.TestCase):
             {"Account": "IRA", "Type": "Tax-Advantaged", "Idle_Cash": "5000"},
         ]
         current_allocations = [
+            # VTI: 50 * 100 = 5000
             {"Ticker": "VTI", "Account": "Taxable", "Shares": "50"},
+            # VXUS: 40 * 50 = 2000
             {"Ticker": "VXUS", "Account": "IRA", "Shares": "40"},
+            # BND: 100 * 80 = 8000
             {"Ticker": "BND", "Account": "Taxable", "Shares": "100"},
         ]
+
+        # total value = 5000 + 2000 + 8000 + 10000 + 5000 = 30000
+
+        # target allocation:
+        #
+        # VTI: 30000 * 0.4 / 100 = 120
+        # VXUS: 30000 * 0.3 / 50 = 180
+        # BND: 30000 * 0.2 / 80 = 75
+        # GLD: 30000 * 0.1 / 150 = 20
 
         result = self.manager.rebalance(
             portfolio_weights, accounts, current_allocations
         )
 
         expected_allocations = [
-            {"Ticker": "VTI", "Account": "Taxable", "Shares": 30, "Action": "buy"},
-            {"Ticker": "VXUS", "Account": "IRA", "Shares": 140, "Action": "buy"},
             {"Ticker": "BND", "Account": "Taxable", "Shares": 25, "Action": "sell"},
-            {"Ticker": "GLD", "Account": "IRA", "Shares": 13, "Action": "buy"},
+            {"Ticker": "GLD", "Account": "IRA", "Shares": 20, "Action": "buy"},
+            {"Ticker": "VXUS", "Account": "IRA", "Shares": 40, "Action": "buy"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 100, "Action": "buy"},
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 70, "Action": "buy"},
         ]
 
-        self.assertEqual(len(result), 4)
+        self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
             self.assertEqual(expected["Ticker"], actual["Ticker"])
             self.assertEqual(expected["Account"], actual["Account"])
@@ -290,7 +303,7 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": 750, "Action": "buy"},
         ]
 
-        self.assertEqual(len(result), 3)
+        self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
             self.assertEqual(expected["Ticker"], actual["Ticker"])
             self.assertEqual(expected["Account"], actual["Account"])
@@ -330,7 +343,7 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": 250, "Action": "buy"},
         ]
 
-        self.assertEqual(len(result), 3)
+        self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
             self.assertEqual(expected["Ticker"], actual["Ticker"])
             self.assertEqual(expected["Account"], actual["Account"])
@@ -358,7 +371,7 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "VTI", "Account": "Taxable", "Shares": 100, "Action": "buy"}
         ]
 
-        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result), len(expected_allocations))
         self.assertEqual(expected_allocations[0]["Ticker"], result[0]["Ticker"])
         self.assertEqual(expected_allocations[0]["Account"], result[0]["Account"])
         self.assertEqual(expected_allocations[0]["Shares"], result[0]["Shares"])
