@@ -69,18 +69,16 @@ class TestPortfolioManager(unittest.TestCase):
         )
 
         expected_allocations = [
-            {"Ticker": "VTI", "Account": "Taxable", "Shares": 400, "Action": "buy"},
             {"Ticker": "VXUS", "Account": "IRA", "Shares": 600, "Action": "buy"},
+            {"Ticker": "VTI", "Account": "401k", "Shares": 200, "Action": "buy"},
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 200, "Action": "buy"},
+            {"Ticker": "BNDX", "Account": "Taxable", "Shares": 111, "Action": "buy"},
             {"Ticker": "BND", "Account": "Taxable", "Shares": 250, "Action": "buy"},
-            {"Ticker": "BNDX", "Account": "401k", "Shares": 111, "Action": "buy"},
         ]
 
-        self.assertEqual(len(result), 4)
+        self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
-            self.assertEqual(expected["Ticker"], actual["Ticker"])
-            self.assertEqual(expected["Account"], actual["Account"])
-            self.assertEqual(expected["Shares"], actual["Shares"])
-            self.assertEqual(expected["Action"], actual["Action"])
+            self.assertEqual(expected, actual)
 
     def test_portfolio_rebalancing(self):
         portfolio_weights = [
@@ -121,17 +119,14 @@ class TestPortfolioManager(unittest.TestCase):
         )
 
         expected_allocations = [
-            {"Ticker": "VTI", "Account": "Taxable", "Shares": 19, "Action": "buy"},
             {"Ticker": "VXUS", "Account": "IRA", "Shares": 106, "Action": "buy"},
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 19, "Action": "buy"},
             {"Ticker": "BND", "Account": "Taxable", "Shares": 95, "Action": "sell"},
         ]
 
-        self.assertEqual(len(result), 3)
+        self.assertEqual(len(result), len(expected_allocations))
         for expected, actual in zip(expected_allocations, result):
-            self.assertEqual(expected["Ticker"], actual["Ticker"])
-            self.assertEqual(expected["Account"], actual["Account"])
-            self.assertEqual(expected["Shares"], actual["Shares"])
-            self.assertEqual(expected["Action"], actual["Action"])
+            self.assertEqual(expected, actual)
 
     def test_removing_investment(self):
         portfolio_weights = [
