@@ -109,19 +109,31 @@ class TestPortfolioManager(unittest.TestCase):
             {"Account": "IRA", "Type": "Tax-Advantaged", "Idle_Cash": "3000"},
         ]
         current_allocations = [
+            # 100 * 100 = 10000
             {"Ticker": "VTI", "Account": "Taxable", "Shares": "100"},
+            # 50 * 50 = 2500
             {"Ticker": "VXUS", "Account": "IRA", "Shares": "50"},
+            # 200 * 80 = 16000
             {"Ticker": "BND", "Account": "Taxable", "Shares": "200"},
         ]
+
+        # total value = 5000 + 3000 + 10000 + 2500 + 16000 = 36500
+
+        # target allocation
+        #
+        # VXUS = 0.35 * 36500 / 50 = 255
+        # VTI = 0.45 * 36500 / 100 = 164
+        # BND = 0.2 * 36500 / 80 = 91
 
         result = self.manager.rebalance(
             portfolio_weights, accounts, current_allocations
         )
 
         expected_allocations = [
-            {"Ticker": "VXUS", "Account": "IRA", "Shares": 106, "Action": "buy"},
-            {"Ticker": "VTI", "Account": "Taxable", "Shares": 19, "Action": "buy"},
-            {"Ticker": "BND", "Account": "Taxable", "Shares": 95, "Action": "sell"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": 109, "Action": "sell"},
+            {"Ticker": "VXUS", "Account": "IRA", "Shares": 60, "Action": "buy"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 46, "Action": "buy"},
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 64, "Action": "buy"},
         ]
 
         self.assertEqual(len(result), len(expected_allocations))

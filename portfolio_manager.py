@@ -174,6 +174,7 @@ class PortfolioManager:
         return sorted(
             result,
             key=lambda x: (
+                x["Action"] == "sell",  # Prioritize sell orders
                 Decimal(self.portfolio_weights.get(x["Ticker"], {"Vol": "0"})["Vol"]),
                 self.accounts[x["Account"]]["Type"] == "Tax-Advantaged",
                 x["Account"],
