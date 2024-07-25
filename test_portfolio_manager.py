@@ -293,14 +293,23 @@ class TestPortfolioManager(unittest.TestCase):
         ]
         current_allocations = []
 
+        # total value = 50000 + 50000 = 100000
+
+        # target allocation:
+        #
+        # VTI: 100000 * 0.3 / 100 = 300
+        # ARKK: 100000 * 0.1 / 75 = 133
+        # BND: 100000 * 0.6 / 80 = 750 
+
         result = self.manager.rebalance(
             portfolio_weights, accounts, current_allocations
         )
 
         expected_allocations = [
-            {"Ticker": "VTI", "Account": "Taxable", "Shares": 300, "Action": "buy"},
             {"Ticker": "ARKK", "Account": "IRA", "Shares": 133, "Action": "buy"},
-            {"Ticker": "BND", "Account": "Taxable", "Shares": 750, "Action": "buy"},
+            {"Ticker": "VTI", "Account": "IRA", "Shares": 300, "Action": "buy"},
+            {"Ticker": "BND", "Account": "IRA", "Shares": 125, "Action": "buy"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": 625, "Action": "buy"},
         ]
 
         self.assertEqual(len(result), len(expected_allocations))
