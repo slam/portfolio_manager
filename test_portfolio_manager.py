@@ -444,8 +444,20 @@ class TestPortfolioManager(unittest.TestCase):
 
     def test_no_rebalancing_needed_under_threshold(self):
         portfolio_weights = [
-            {"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "0.6", "Asset_Class": "Equity", "Sub_Class": "US"},
-            {"Ticker": "VXUS", "Vol": "0.12", "Cash_Weight": "0.4", "Asset_Class": "Equity", "Sub_Class": "International"},
+            {
+                "Ticker": "VTI",
+                "Vol": "0.1",
+                "Cash_Weight": "0.6",
+                "Asset_Class": "Equity",
+                "Sub_Class": "US",
+            },
+            {
+                "Ticker": "VXUS",
+                "Vol": "0.12",
+                "Cash_Weight": "0.4",
+                "Asset_Class": "Equity",
+                "Sub_Class": "International",
+            },
         ]
         accounts = [
             {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "400"},
@@ -466,10 +478,244 @@ class TestPortfolioManager(unittest.TestCase):
         #
         # No rebalancing needed
 
-        result = self.manager.rebalance(portfolio_weights, accounts, current_allocations)
+        result = self.manager.rebalance(
+            portfolio_weights, accounts, current_allocations
+        )
 
         # Expected: No orders should be generated
         expected_allocations = []
+
+        self.assertEqual(result, expected_allocations)
+
+    def test_partial_rebalancing_minimize_costs(self):
+        portfolio_weights = [
+            {
+                "Ticker": "VTI",
+                "Vol": "0.1",
+                "Cash_Weight": "0.5",
+                "Asset_Class": "Equity",
+                "Sub_Class": "US",
+            },
+            {
+                "Ticker": "VXUS",
+                "Vol": "0.12",
+                "Cash_Weight": "0.3",
+                "Asset_Class": "Equity",
+                "Sub_Class": "International",
+            },
+            {
+                "Ticker": "BND",
+                "Vol": "0.05",
+                "Cash_Weight": "0.2",
+                "Asset_Class": "Bond",
+                "Sub_Class": "US",
+            },
+        ]
+        accounts = [
+            {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "1000"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "50"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": "60"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": "10"},
+        ]
+
+        self.mock_prices["VTI"] = Decimal("100")
+        self.mock_prices["VXUS"] = Decimal("50")
+        self.mock_prices["BND"] = Decimal("100")
+
+        # Total portfolio value = 1000 + 50*100 + 60*50 + 10*100 = 10000
+        # Target allocation:
+        # VTI: 10000 * 0.5 / 100 = 50 shares (no change, within 5%)
+        # VXUS: 10000 * 0.3 / 50 = 60 shares (no change, within 5%)
+        # BND: 10000 * 0.2 / 100 = 20 shares (100% increase, needs rebalancing)
+
+        result = self.manager.rebalance(
+            portfolio_weights, accounts, current_allocations
+        )
+
+        # Expected: Only BND should be rebalanced
+        expected_allocations = [
+            {"Ticker": "BND", "Account": "Taxable", "Shares": 10, "Action": "buy"},
+        ]
+
+        self.assertEqual(result, expected_allocations)
+
+    def test_full_rebalancing_minimize_costs(self):
+        portfolio_weights = [
+            {
+                "Ticker": "VTI",
+                "Vol": "0.1",
+                "Cash_Weight": "0.4",
+                "Asset_Class": "Equity",
+                "Sub_Class": "US",
+            },
+            {
+                "Ticker": "VXUS",
+                "Vol": "0.12",
+                "Cash_Weight": "0.4",
+                "Asset_Class": "Equity",
+                "Sub_Class": "International",
+            },
+            {
+                "Ticker": "BND",
+                "Vol": "0.05",
+                "Cash_Weight": "0.2",
+                "Asset_Class": "Bond",
+                "Sub_Class": "US",
+            },
+        ]
+        accounts = [
+            {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "1000"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "60"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": "40"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": "10"},
+        ]
+
+        self.mock_prices["VTI"] = Decimal("100")
+        self.mock_prices["VXUS"] = Decimal("100")
+        self.mock_prices["BND"] = Decimal("100")
+
+        # Total portfolio value = 1000 + 60*100 + 40*100 + 10*100 = 12000
+        # Target allocation:
+        # VTI: 12000 * 0.4 / 100 = 48 shares (20% decrease, needs rebalancing)
+        # VXUS: 12000 * 0.4 / 100 = 48 shares (20% increase, needs rebalancing)
+        # BND: 12000 * 0.2 / 100 = 24 shares (140% increase, needs rebalancing)
+
+        result = self.manager.rebalance(
+            portfolio_weights, accounts, current_allocations
+        )
+
+        # Expected: All positions should be rebalanced
+        expected_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 12, "Action": "sell"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 8, "Action": "buy"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": 14, "Action": "buy"},
+        ]
+
+        self.assertEqual(result, expected_allocations)
+
+    def test_edge_case_minimize_costs_threshold(self):
+        portfolio_weights = [
+            {
+                "Ticker": "VTI",
+                "Vol": "0.1",
+                "Cash_Weight": "0.4",
+                "Asset_Class": "Equity",
+                "Sub_Class": "US",
+            },
+            {
+                "Ticker": "VXUS",
+                "Vol": "0.12",
+                "Cash_Weight": "0.3",
+                "Asset_Class": "Equity",
+                "Sub_Class": "International",
+            },
+            {
+                "Ticker": "BND",
+                "Vol": "0.05",
+                "Cash_Weight": "0.3",
+                "Asset_Class": "Bond",
+                "Sub_Class": "US",
+            },
+        ]
+        accounts = [
+            {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "1000"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "42"},  # 5% over
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": "29"},  # 3.33% under
+            {"Ticker": "BND", "Account": "Taxable", "Shares": "28"},  # 6.67% under
+        ]
+
+        self.mock_prices["VTI"] = Decimal("100")
+        self.mock_prices["VXUS"] = Decimal("100")
+        self.mock_prices["BND"] = Decimal("100")
+
+        # Total portfolio value = 1000 + 42*100 + 29*100 + 28*100 = 10900
+
+        # Target allocation:
+        # VTI: 10900 * 0.4 / 100 = 43 shares (4.76% increase, no rebalancing)
+        # VXUS: 10900 * 0.3 / 100 = 32 shares (13.79% increase, needs rebalancing)
+        # BND: 10900 * 0.3 / 100 = 32 shares (17.86% increase, needs rebalancing)
+
+        result = self.manager.rebalance(
+            portfolio_weights, accounts, current_allocations
+        )
+
+        # Expected: VXUS and BND should be rebalanced
+        expected_allocations = [
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 3, "Action": "buy"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": 4, "Action": "buy"},
+        ]
+
+        self.assertEqual(result, expected_allocations)
+
+    def test_new_investment_minimize_costs(self):
+        portfolio_weights = [
+            {
+                "Ticker": "VTI",
+                "Vol": "0.1",
+                "Cash_Weight": "0.4",
+                "Asset_Class": "Equity",
+                "Sub_Class": "US",
+            },
+            {
+                "Ticker": "VXUS",
+                "Vol": "0.12",
+                "Cash_Weight": "0.3",
+                "Asset_Class": "Equity",
+                "Sub_Class": "International",
+            },
+            {
+                "Ticker": "BND",
+                "Vol": "0.05",
+                "Cash_Weight": "0.2",
+                "Asset_Class": "Bond",
+                "Sub_Class": "US",
+            },
+            {
+                "Ticker": "GLD",
+                "Vol": "0.15",
+                "Cash_Weight": "0.1",
+                "Asset_Class": "Commodity",
+                "Sub_Class": "Gold",
+            },
+        ]
+        accounts = [
+            {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "10000"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "40"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": "30"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": "20"},
+        ]
+
+        self.mock_prices["VTI"] = Decimal("100")
+        self.mock_prices["VXUS"] = Decimal("100")
+        self.mock_prices["BND"] = Decimal("100")
+        self.mock_prices["GLD"] = Decimal("100")
+
+        # Total portfolio value = 10000 + 40*100 + 30*100 + 20*100 = 19000
+        # Target allocation:
+        # VTI: 19000 * 0.4 / 100 = 76 shares (90% increase, needs rebalancing)
+        # VXUS: 19000 * 0.3 / 100 = 57 shares (90% increase, needs rebalancing)
+        # BND: 19000 * 0.2 / 100 = 38 shares (90% increase, needs rebalancing)
+        # GLD: 19000 * 0.1 / 100 = 19 shares (new investment, needs buying)
+
+        result = self.manager.rebalance(
+            portfolio_weights, accounts, current_allocations
+        )
+
+        # Expected: All positions should be rebalanced, including buying the new GLD position
+        expected_allocations = [
+            {"Ticker": "GLD", "Account": "Taxable", "Shares": 19, "Action": "buy"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 27, "Action": "buy"},
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 36, "Action": "buy"},
+            {"Ticker": "BND", "Account": "Taxable", "Shares": 18, "Action": "buy"},
+        ]
 
         self.assertEqual(result, expected_allocations)
 
