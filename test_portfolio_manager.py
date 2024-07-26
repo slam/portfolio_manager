@@ -720,5 +720,39 @@ class TestPortfolioManager(unittest.TestCase):
         self.assertEqual(result, expected_allocations)
 
 
+    def test_allocation_with_insufficient_funds(self):
+        portfolio_weights = [
+            {"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "0.68", "Asset_Class": "Equity", "Sub_Class": "US"},
+            {"Ticker": "VXUS", "Vol": "0.12", "Cash_Weight": "0.32", "Asset_Class": "Equity", "Sub_Class": "International"},
+        ]
+        accounts = [
+            {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "100"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "600"},  # Slightly over-allocated but within 5%
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": "250"},
+        ]
+
+        self.mock_prices["VTI"] = Decimal("10")
+        self.mock_prices["VXUS"] = Decimal("10")
+    
+        # Total portfolio value = 600*10 + 250*10 = 8600
+        # Target allocation:
+        # VTI: 8600 * 0.68 = 5848 (target value)
+        #     Current value: 600 * 10 = 6000
+        #     Difference: |6000 - 5848| / 6000 = 0.025
+        # VXUS: 8600 * 0.32 = 2720 (target value)
+        #     Current value: 250 * 10 = 2500
+        #     Need to buy: (2752 - 2500) / 10 = 25 shares
+
+        result = self.manager.rebalance(portfolio_weights, accounts, current_allocations)
+
+        expected_allocations = [
+            # Only have cash to buy 10 shares
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 10, "Action": "buy"},
+        ]
+
+        self.assertEqual(result, expected_allocations)
+
 if __name__ == "__main__":
     unittest.main()
