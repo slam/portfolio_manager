@@ -1,5 +1,13 @@
 # Portfolio Manager
 
+## Overview
+
+This Portfolio Manager is a software program designed to help manage and rebalance strategic investment portfolios. It can be used for:
+
+1. Seeding an initial investment portfolio
+2. Performing periodic maintenance of the portfolio, including replacing existing investments, adding new positions, or reducing existing positions
+
+This is written with the help of AI. This is primarily a learning exercise to help me understand the capabilities of AI and how to use it to build software. The code is not perfect and is a work in progress.
 
 ## Setup
 
@@ -11,54 +19,126 @@ pip install -r requirements.txt
 
 ## Inputs
 
-To rebalance, we need to have the following inputs:
+The Portfolio Manager takes three input CSV files and a configuration YAML file:
 
-List of Accounts in `accounts.csv`.
+1. `portfolio_weights.csv`: Contains the portfolio cash weights
+2. `accounts.csv`: Contains the accounts in the portfolio
+3. `current_allocations.csv`: Contains the current allocations
+4. `config.yaml`: Contains the file paths for the input CSV files
 
-```
-Account,Type,Cash_Flow
-Etrade Taxable,Taxable,10000
-Schwab IRA,Tax-Advantaged,5000
-Carry Solo401K,Tax-Advantaged,2000
-Schwab Taxable,Taxable,8000
-```
+### 1. Portfolio Weights (portfolio_weights.csv)
 
-List of ETFs and their cash weights and volatilities in `etf_weights.csv`.
+This file contains the following columns:
+
+- Ticker
+- Volatility
+- Cash_Weight
+- Asset_Class
+- Sub_Class
+
+Example:
 
 ```
 Ticker,Vol,Cash_Weight,Asset_Class,Sub_Class
 VWOB,0.0836,0.015,Bond,EM gov
 CEMB,0.0457,0.028,Bond,EM corp
 EMHY,0.0725,0.018,Bond,EM HY
-BWX,0.0893,0.012,Bond,Non-US Gov
-IBND,0.0855,0.012,Bond,Non-US Corp
-HYXU,0.0812,0.017,Bond,Non-US HY
-GOVT,0.0596,0.015,Bond,US Gov
-LQD,0.0870,0.010,Bond,US Corp
-JNK,0.0574,0.022,Bond,US HY
 VWO,0.1315,0.045,Equity,EM Beta
 DEM,0.1292,0.088,Equity,EM HY
-EEMV,0.0908,0.097,Equity,EM Value
-VPL,0.1306,0.029,Equity,Asia Beta
-DVYA,0.1320,0.074,Equity,Asia HY
-VGK,0.1289,0.036,Equity,Euro Beta
-FDD,0.1392,0.070,Equity,Euro HY
-EFV,0.1191,0.149,Equity,DM Value
-VOO,0.1124,0.053,Equity,US Beta
-VYM,0.1020,0.113,Equity,US HY
-VTV,0.0983,0.099,Equity,US Value
 ```
 
-Current Allocation in `current_allocation.csv`.
+### 2. Accounts (accounts.csv)
+
+This file contains the following columns:
+
+- Account
+- Type
+- Idle_Cash
+
+Example:
 
 ```
-Ticker,Account,Current_Shares
-VWOB,Etrade Taxable,1000
-DEM,Carry Solo401K,100
+Account,Type,Idle_Cash
+Taxable,Taxable,10000
+IRA,Tax-Advantaged,5000
+Solo401K,Tax-Advantaged,2000
 ```
 
-## Rebalance
+### 3. Current Allocations (current_allocations.csv)
+
+This file contains the following columns:
+
+- Ticker
+- Account
+- Shares
+
+Example:
 
 ```
-python portfolio_manager.py
+Ticker,Account,Shares
+VWOB,Taxable,10
+DEM,Solo401K,10
+SPY,Taxable,5
 ```
+
+### 4. Configuration (config.yaml)
+
+This YAML file specifies the paths to the input CSV files. The paths are relative to the directory location of the config.yaml file.
+
+Example:
+
+```yaml
+portfolio_weights: ./portfolio_weights.csv
+accounts: ./accounts.csv
+current_allocations: ./current_allocations.csv
+```
+
+## Usage
+
+To run the Portfolio Manager:
+
+```
+python portfolio_manager.py [path_to_config.yaml]
+```
+
+If no config file is specified, it defaults to `./config.yaml` in the current directory.
+
+## Rebalancing Process
+
+The Portfolio Manager follows these steps to rebalance the portfolio:
+
+1. Read the input files specified in the config.yaml
+2. Fetch current prices of investments from Yahoo Finance
+3. Calculate the total portfolio value (including idle cash in each account)
+4. Determine the target allocation for each investment based on the total portfolio value and cash weights
+5. Adjust the current allocation to reach the target allocation, considering:
+   - Volatile investments should be in tax-advantaged accounts
+   - New investments are allocated based on volatility
+   - Investments no longer in the portfolio weights are sold
+   - Current allocations can be empty (new portfolio)
+   - Investments may be split among several accounts if necessary
+
+## Key Features
+
+- Handles both new portfolio creation and existing portfolio rebalancing
+- Prioritizes tax-efficient placement of investments
+- Applies a 5% threshold for rebalancing to minimize unnecessary trades
+- Handles adding new investments and removing old ones
+- Can split investments across multiple accounts when necessary
+- Sorts buy and sell orders by volatility and account type for optimal execution
+
+## Testing
+
+To run the unit tests:
+
+```
+python -m unittest test_portfolio_manager.py
+```
+
+The test suite includes various scenarios such as new portfolio creation, rebalancing existing portfolios, handling new investments, and edge cases like insufficient funds.
+
+## Notes
+
+- The Portfolio Manager uses the `yfinance` library to fetch current prices. Ensure you have an active internet connection when running the program.
+- All calculations are performed using the `Decimal` type to ensure precision in financial calculations.
+- The program uses logging to provide detailed information about the rebalancing process. You can adjust the logging level in the `portfolio_manager.py` file.
