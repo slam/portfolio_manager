@@ -442,6 +442,37 @@ class TestPortfolioManager(unittest.TestCase):
         for expected, actual in zip(expected_allocations, result):
             self.assertEqual(expected, actual)
 
+    def test_no_rebalancing_needed_under_threshold(self):
+        portfolio_weights = [
+            {"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "0.6", "Asset_Class": "Equity", "Sub_Class": "US"},
+            {"Ticker": "VXUS", "Vol": "0.12", "Cash_Weight": "0.4", "Asset_Class": "Equity", "Sub_Class": "International"},
+        ]
+        accounts = [
+            {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "400"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "60"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": "80"},
+        ]
+
+        self.mock_prices["VTI"] = Decimal("100")
+        self.mock_prices["VXUS"] = Decimal("50")
+
+        # total portfolio value = 1000 + 60 * 100 + 80 * 50 = 10000
+
+        # target allocation:
+        # VTI: 10400 * 0.6 / 100 = 62 shares < 5%
+        # VXUS: 10400 * 0.4 / 50 = 83 shares < 5%
+        #
+        # No rebalancing needed
+
+        result = self.manager.rebalance(portfolio_weights, accounts, current_allocations)
+
+        # Expected: No orders should be generated
+        expected_allocations = []
+
+        self.assertEqual(result, expected_allocations)
+
 
 if __name__ == "__main__":
     unittest.main()

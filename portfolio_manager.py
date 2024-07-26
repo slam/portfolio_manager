@@ -26,6 +26,7 @@ class PortfolioManager:
 
         self.calculate_current_state()
         self.calculate_target_state()
+        self.apply_rebalance_threshold()
 
         sell_orders = self.generate_sell_orders()
         self.execute_sell_orders(sell_orders)
@@ -66,6 +67,28 @@ class PortfolioManager:
                 target_value / self.get_price(ticker)
             ).to_integral_value(rounding=ROUND_DOWN)
         logger.debug(f"Target state: {self.target_state}")
+
+    def apply_rebalance_threshold(self):
+        logger.debug("Applying 5% rebalance threshold...")
+        for ticker, target_shares in self.target_state.items():
+            current_shares = sum(self.current_state[ticker].values())
+            current_value = current_shares * self.get_price(ticker)
+            target_value = target_shares * self.get_price(ticker)
+
+            if current_value == 0:
+                # This is a new investment, don't apply threshold
+                logger.debug(f"{ticker}: New investment. Target: {target_shares}")
+                continue
+
+            if abs(current_value - target_value) / current_value < Decimal("0.05"):
+                logger.debug(
+                    f"{ticker}: Within 5% threshold. Current: {current_shares}, Target: {target_shares}"
+                )
+                self.target_state[ticker] = current_shares
+            else:
+                logger.debug(
+                    f"{ticker}: Outside 5% threshold. Current: {current_shares}, Target: {target_shares}"
+                )
 
     def generate_sell_orders(self):
         logger.debug("Generating sell orders...")
