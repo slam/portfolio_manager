@@ -20,22 +20,46 @@ class PortfolioManager:
 
     def rebalance(self, portfolio_weights, accounts, current_allocations):
         logger.debug("Starting rebalance...")
+        logger.debug(f"Input portfolio_weights: {portfolio_weights}")
+        logger.debug(f"Input accounts: {accounts}")
+        logger.debug(f"Input current_allocations: {current_allocations}")
+
         self.portfolio_weights = {w["Ticker"]: w for w in portfolio_weights}
         self.accounts = {a["Account"]: a for a in accounts}
         self.current_allocations = current_allocations
 
+        logger.debug("Calculating current state...")
         self.calculate_current_state()
-        self.calculate_target_state()
-        self.apply_rebalance_threshold()
+        logger.debug(f"Current state: {dict(self.current_state)}")
 
+        logger.debug("Calculating target state...")
+        self.calculate_target_state()
+        logger.debug(f"Target state: {self.target_state}")
+
+        logger.debug("Applying rebalance threshold...")
+        self.apply_rebalance_threshold()
+        logger.debug(f"Target state after threshold: {self.target_state}")
+
+        logger.debug("Generating sell orders...")
         sell_orders = self.generate_sell_orders()
+        logger.debug(f"Sell orders: {sell_orders}")
+
+        logger.debug("Executing sell orders...")
         self.execute_sell_orders(sell_orders)
+        logger.debug(f"Updated current state: {dict(self.current_state)}")
+        logger.debug(f"Updated account cash: {self.account_cash}")
+
+        logger.debug("Generating buy orders...")
         buy_orders = self.generate_buy_orders()
+        logger.debug(f"Buy orders: {buy_orders}")
 
         all_orders = sell_orders + buy_orders
         logger.debug(f"All orders before combining: {all_orders}")
+
+        logger.debug("Combining orders...")
         combined_orders = self.combine_orders(all_orders)
-        logger.debug(f"Final orders: {combined_orders}")
+        logger.debug(f"Final combined orders: {combined_orders}")
+
         return combined_orders
 
     def calculate_current_state(self):
@@ -60,13 +84,15 @@ class PortfolioManager:
 
     def calculate_target_state(self):
         logger.debug("Calculating target state...")
+        logger.debug(f"Portfolio weights: {self.portfolio_weights}")
+        logger.debug(f"Total value: {self.total_value}")
         self.target_state = {}
         for ticker, weight in self.portfolio_weights.items():
             target_value = Decimal(weight["Cash_Weight"]) * self.total_value
             self.target_state[ticker] = (
                 target_value / self.get_price(ticker)
             ).to_integral_value(rounding=ROUND_DOWN)
-        logger.debug(f"Target state: {self.target_state}")
+        logger.debug(f"Calculated target state: {self.target_state}")
 
     def apply_rebalance_threshold(self):
         logger.debug("Applying 5% rebalance threshold...")
@@ -127,6 +153,8 @@ class PortfolioManager:
 
     def generate_buy_orders(self):
         logger.debug("Generating buy orders...")
+        logger.debug(f"Current state before buy orders: {self.current_state}")
+        logger.debug(f"Target state: {self.target_state}")
         buy_orders = []
         for ticker, weight in sorted(
             self.portfolio_weights.items(),
@@ -139,6 +167,7 @@ class PortfolioManager:
                 self.allocate_buy_orders(
                     ticker, target_shares - current_shares, buy_orders
                 )
+        logger.debug(f"Generated buy orders: {buy_orders}")
         return buy_orders
 
     def allocate_sell_orders(self, ticker, shares_to_sell, orders):
@@ -193,10 +222,12 @@ class PortfolioManager:
         for account in sorted_accounts:
             account_name = account["Account"]
             available_cash = Decimal(self.account_cash[account_name])
+            logger.debug(f"Available cash for {account_name}: {available_cash}")
             buyable_shares = min(
                 shares_to_buy,
                 (available_cash / price).to_integral_value(rounding=ROUND_DOWN),
             )
+            logger.debug(f"Buyable shares: {buyable_shares}")
 
             if buyable_shares >= 1:
                 orders.append(
@@ -212,9 +243,12 @@ class PortfolioManager:
                 logger.debug(
                     f"Bought {int(buyable_shares)} shares of {ticker} in {account_name}"
                 )
+                logger.debug(f"Updated account cash for {account_name}: {self.account_cash[account_name]}")
 
             if shares_to_buy < 1:
                 break
+
+            logger.debug(f"Remaining shares to buy for {ticker}: {shares_to_buy}")
 
         if shares_to_buy >= 1:
             logger.warning(
@@ -234,6 +268,9 @@ class PortfolioManager:
             else:
                 buy_orders.append(order)
 
+        logger.debug(f"Separated buy orders: {buy_orders}")
+        logger.debug(f"Separated sell orders: {sell_orders}")
+
         # Sort sell orders
         sell_orders = sorted(
             sell_orders,
@@ -247,6 +284,7 @@ class PortfolioManager:
                 x["Account"],  # Then by account name
             ),
         )
+        logger.debug(f"Sorted sell orders: {sell_orders}")
 
         # Sort buy orders
         buy_orders = sorted(
@@ -261,6 +299,7 @@ class PortfolioManager:
                 x["Account"],  # Then by account name
             ),
         )
+        logger.debug(f"Sorted buy orders: {buy_orders}")
 
         combined_orders = sell_orders + buy_orders
 

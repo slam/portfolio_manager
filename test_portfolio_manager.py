@@ -754,5 +754,41 @@ class TestPortfolioManager(unittest.TestCase):
 
         self.assertEqual(result, expected_allocations)
 
+    def test_new_portfolio_with_empty_current_allocations(self):
+        portfolio_weights = [
+            {"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "0.4", "Asset_Class": "Equity", "Sub_Class": "US"},
+            {"Ticker": "VXUS", "Vol": "0.12", "Cash_Weight": "0.3", "Asset_Class": "Equity", "Sub_Class": "International"},
+            {"Ticker": "BND", "Vol": "0.03", "Cash_Weight": "0.2", "Asset_Class": "Bond", "Sub_Class": "US"},
+            {"Ticker": "BNDX", "Vol": "0.04", "Cash_Weight": "0.1", "Asset_Class": "Bond", "Sub_Class": "International"},
+        ]
+        accounts = [
+            {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "50000"},
+            {"Account": "IRA", "Type": "Tax-Advantaged", "Idle_Cash": "30000"},
+        ]
+        current_allocations = []
+
+        result = self.manager.rebalance(portfolio_weights, accounts, current_allocations)
+
+        expected_allocations = [
+            {'Ticker': 'VXUS', 'Account': 'IRA', 'Shares': 480, 'Action': 'buy'},
+            {'Ticker': 'VTI', 'Account': 'IRA', 'Shares': 60, 'Action': 'buy'},
+            {'Ticker': 'VTI', 'Account': 'Taxable', 'Shares': 260, 'Action': 'buy'},
+            {'Ticker': 'BNDX', 'Account': 'Taxable', 'Shares': 88, 'Action': 'buy'},
+            {'Ticker': 'BND', 'Account': 'Taxable', 'Shares': 200, 'Action': 'buy'}
+        ]
+
+        self.assertEqual(result, expected_allocations)
+
+        # Verify that all funds are allocated
+        total_invested = sum(self.mock_prices[alloc["Ticker"]] * alloc["Shares"] for alloc in result)
+        total_funds = sum(Decimal(account["Idle_Cash"]) for account in accounts)
+        self.assertAlmostEqual(total_invested, total_funds, delta=100)  # Allow for small rounding differences
+
+        # Verify correct allocation across accounts
+        ira_allocation = sum(alloc["Shares"] * self.mock_prices[alloc["Ticker"]] for alloc in result if alloc["Account"] == "IRA")
+        taxable_allocation = sum(alloc["Shares"] * self.mock_prices[alloc["Ticker"]] for alloc in result if alloc["Account"] == "Taxable")
+        self.assertAlmostEqual(ira_allocation, Decimal("30000"), delta=100)
+        self.assertAlmostEqual(taxable_allocation, Decimal("50000"), delta=100)
+
 if __name__ == "__main__":
     unittest.main()
