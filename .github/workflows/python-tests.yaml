@@ -1,4 +1,4 @@
-name: Python Tests and Linting
+name: Python Tests, Linting, and Formatting
 
 on:
   push:
@@ -21,7 +21,9 @@ jobs:
           pip install -r requirements.txt
       - name: Install Ruff
         run: pip install ruff
-      - name: Run Ruff
+      - name: Run Ruff linter
         run: ruff check .
+      - name: Run Ruff formatter
+        run: ruff format . --check
       - name: Run tests
         run: python -m unittest test_portfolio_manager.py
