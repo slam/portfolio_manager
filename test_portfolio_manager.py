@@ -871,8 +871,6 @@ class TestPortfolioManager(unittest.TestCase):
         manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
-        manager.fetch_prices()
-
         result = manager.rebalance()
 
         expected_orders = [
