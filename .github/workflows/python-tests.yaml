@@ -1,4 +1,4 @@
-name: Python Tests
+name: Python Tests and Linting
 
 on:
   push:
@@ -19,5 +19,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Install Ruff
+        run: pip install ruff
+      - name: Run Ruff
+        run: ruff check .
       - name: Run tests
         run: python -m unittest test_portfolio_manager.py
