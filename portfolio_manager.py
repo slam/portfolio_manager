@@ -2,28 +2,102 @@ import yfinance as yf
 from decimal import Decimal, ROUND_DOWN
 from collections import defaultdict
 import logging
+import yaml
+import csv
+import os
+import sys
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-class PortfolioManager:
-    def __init__(self):
-        self.prices = {}
+class DataLoader:
+    @staticmethod
+    def load_from_config(config_path):
+        logger.debug(f"Loading config from {config_path}")
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
 
-    def get_price(self, ticker):
+        base_dir = os.path.dirname(os.path.abspath(config_path))
+
+        portfolio_data = {
+            "portfolio_weights": DataLoader.load_csv(
+                os.path.join(base_dir, config["portfolio_weights"])
+            ),
+            "accounts": DataLoader.load_csv(os.path.join(base_dir, config["accounts"])),
+            "current_allocations": DataLoader.load_csv(
+                os.path.join(base_dir, config["current_allocations"])
+            ),
+        }
+
+        logger.debug(f"Loaded portfolio data: {portfolio_data}")
+        return portfolio_data
+
+    @staticmethod
+    def load_from_data(portfolio_weights, accounts, current_allocations):
+        return {
+            "portfolio_weights": portfolio_weights,
+            "accounts": accounts,
+            "current_allocations": current_allocations,
+        }
+
+    @staticmethod
+    def load_csv(file_path):
+        logger.debug(f"Loading CSV from {file_path}")
+        with open(file_path, "r") as f:
+            reader = csv.DictReader(f)
+            data = list(reader)
+        logger.debug(f"Loaded {len(data)} rows from {file_path}")
+        return data
+
+
+class PriceFetchError(Exception):
+    """Custom exception for price fetching errors."""
+
+    pass
+
+
+class PortfolioManager:
+    def __init__(self, portfolio_data):
+        self.prices = {}
+        self.portfolio_weights = {
+            pw["Ticker"]: pw for pw in portfolio_data["portfolio_weights"]
+        }
+        self.accounts = {a["Account"]: a for a in portfolio_data["accounts"]}
+        self.current_allocations = portfolio_data["current_allocations"]
+
+    def get_all_tickers(self):
+        weight_tickers = set(self.portfolio_weights.keys())
+        allocation_tickers = {a["Ticker"] for a in self.current_allocations}
+        return weight_tickers.union(allocation_tickers)
+
+    def fetch_prices(self):
+        tickers = self.get_all_tickers()
+        logger.debug(f"Fetching prices for tickers: {tickers}")
+
+        try:
+            yf_tickers = yf.Tickers(" ".join(tickers))
+            for ticker, info in yf_tickers.tickers.items():
+                if "previousClose" in info.info:
+                    self.prices[ticker] = Decimal(str(info.info["previousClose"]))
+                else:
+                    raise PriceFetchError(f"Unable to fetch closing price for {ticker}")
+
+            logger.debug(f"Fetched prices: {self.prices}")
+        except Exception as e:
+            logger.error(f"Error fetching prices: {str(e)}")
+            raise PriceFetchError(
+                "Failed to get accurate price data for one or more tickers"
+            ) from e
+
+    def get_price(self, ticker: str):
         if ticker not in self.prices:
-            self.prices[ticker] = Decimal(
-                str(yf.Ticker(ticker).info["regularMarketPrice"])
-            )
+            raise PriceFetchError(f"Price for {ticker} not available")
         return self.prices[ticker]
 
-    def rebalance(self, portfolio_weights, accounts, current_allocations):
+    def rebalance(self):
         logger.debug("Starting rebalance...")
-        self.portfolio_weights = {w["Ticker"]: w for w in portfolio_weights}
-        self.accounts = {a["Account"]: a for a in accounts}
-        self.current_allocations = current_allocations
-
+        self.fetch_prices()
         self.calculate_current_state()
         self.calculate_target_state()
         self.apply_rebalance_threshold()
@@ -266,3 +340,32 @@ class PortfolioManager:
 
         logger.debug(f"Combined and sorted orders: {combined_orders}")
         return combined_orders
+
+
+class PortfolioManagerFactory:
+    @staticmethod
+    def create_from_config(config_path):
+        data = DataLoader.load_from_config(config_path)
+        return PortfolioManager(data)
+
+    @staticmethod
+    def create_from_data(portfolio_weights, accounts, current_allocations):
+        data = DataLoader.load_from_data(
+            portfolio_weights, accounts, current_allocations
+        )
+        return PortfolioManager(data)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        config_path = sys.argv[1]
+    else:
+        config_path = "./config.yaml"
+
+    manager = PortfolioManagerFactory.create_from_config(config_path)
+    rebalance_orders = manager.rebalance()
+    print("Rebalance orders:")
+    for order in rebalance_orders:
+        print(
+            f"{order['Action']} {order['Shares']} shares of {order['Ticker']} in {order['Account']}"
+        )

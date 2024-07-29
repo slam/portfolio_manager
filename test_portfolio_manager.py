@@ -1,12 +1,12 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from decimal import Decimal
-from portfolio_manager import PortfolioManager
+from portfolio_manager import PortfolioManagerFactory, PriceFetchError
 
 
 class TestPortfolioManager(unittest.TestCase):
     def setUp(self):
-        self.mock_prices = {
+        self.default_prices = {
             "VTI": Decimal("100.00"),
             "VXUS": Decimal("50.00"),
             "BND": Decimal("80.00"),
@@ -15,16 +15,56 @@ class TestPortfolioManager(unittest.TestCase):
             "GLD": Decimal("150.00"),
         }
 
-        self.patcher = patch("portfolio_manager.yf.Ticker")
-        self.mock_ticker = self.patcher.start()
-        self.mock_ticker.side_effect = lambda symbol: MagicMock(
-            info={"regularMarketPrice": self.mock_prices[symbol]}
-        )
+        self.setup_price_mock(self.default_prices)
 
-        self.manager = PortfolioManager()
+    def setup_price_mock(self, prices):
+        patcher = patch("yfinance.Tickers")
+        self.mock_tickers = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.mock_tickers.return_value.tickers = {
+            ticker: MagicMock(info={"previousClose": float(price)})
+            for ticker, price in prices.items()
+        }
 
-    def tearDown(self):
-        self.patcher.stop()
+    def test_file_based_initialization(self):
+        with patch("portfolio_manager.DataLoader.load_from_config") as mock_load:
+            mock_load.return_value = {
+                "portfolio_weights": [
+                    {
+                        "Ticker": "VTI",
+                        "Vol": "0.1",
+                        "Cash_Weight": "0.6",
+                        "Asset_Class": "Equity",
+                        "Sub_Class": "US",
+                    },
+                    {
+                        "Ticker": "BND",
+                        "Vol": "0.03",
+                        "Cash_Weight": "0.4",
+                        "Asset_Class": "Bond",
+                        "Sub_Class": "US",
+                    },
+                ],
+                "accounts": [
+                    {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "10000"},
+                    {"Account": "IRA", "Type": "Tax-Advantaged", "Idle_Cash": "5000"},
+                ],
+                "current_allocations": [
+                    {"Ticker": "VTI", "Account": "Taxable", "Shares": "50"}
+                ],
+            }
+
+            manager = PortfolioManagerFactory.create_from_config("dummy_config.yaml")
+
+            self.assertEqual(len(manager.portfolio_weights), 2)
+            self.assertEqual(manager.portfolio_weights["VTI"]["Cash_Weight"], "0.6")
+            self.assertEqual(manager.portfolio_weights["BND"]["Cash_Weight"], "0.4")
+            self.assertEqual(len(manager.accounts), 2)
+            self.assertEqual(manager.accounts["Taxable"]["Idle_Cash"], "10000")
+            self.assertEqual(manager.accounts["IRA"]["Idle_Cash"], "5000")
+            self.assertEqual(len(manager.current_allocations), 1)
+            self.assertEqual(manager.current_allocations[0]["Ticker"], "VTI")
+            self.assertEqual(manager.current_allocations[0]["Shares"], "50")
 
     def test_new_portfolio_creation(self):
         portfolio_weights = [
@@ -64,9 +104,10 @@ class TestPortfolioManager(unittest.TestCase):
         ]
         current_allocations = []
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         expected_allocations = [
             {"Ticker": "VXUS", "Account": "IRA", "Shares": 600, "Action": "buy"},
@@ -125,9 +166,10 @@ class TestPortfolioManager(unittest.TestCase):
         # VTI = 0.45 * 36500 / 100 = 164
         # BND = 0.2 * 36500 / 80 = 91
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         expected_allocations = [
             {"Ticker": "BND", "Account": "Taxable", "Shares": 109, "Action": "sell"},
@@ -174,9 +216,10 @@ class TestPortfolioManager(unittest.TestCase):
         # VTI: 15500 * 0.6 / 100 = 93
         # BND: 15500 * 0.4 / 80 = 77
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         expected_allocations = [
             {"Ticker": "BND", "Account": "Taxable", "Shares": 23, "Action": "sell"},
@@ -241,9 +284,10 @@ class TestPortfolioManager(unittest.TestCase):
         # BND: 30000 * 0.2 / 80 = 75
         # GLD: 30000 * 0.1 / 150 = 20
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         expected_allocations = [
             {"Ticker": "BND", "Account": "Taxable", "Shares": 25, "Action": "sell"},
@@ -295,9 +339,10 @@ class TestPortfolioManager(unittest.TestCase):
         # ARKK: 100000 * 0.1 / 75 = 133
         # BND: 100000 * 0.6 / 80 = 750
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         expected_allocations = [
             {"Ticker": "ARKK", "Account": "IRA", "Shares": 133, "Action": "buy"},
@@ -340,9 +385,10 @@ class TestPortfolioManager(unittest.TestCase):
         # VTI: 100000 * 0.8 / 100 = 800
         # BND: 100000 * 0.2 / 80 = 250
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         expected_allocations = [
             {"Ticker": "VTI", "Account": "IRA", "Shares": 400, "Action": "buy"},
@@ -367,9 +413,10 @@ class TestPortfolioManager(unittest.TestCase):
         accounts = [{"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "10000"}]
         current_allocations = []
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         expected_allocations = [
             {"Ticker": "VTI", "Account": "Taxable", "Shares": 100, "Action": "buy"}
@@ -426,9 +473,10 @@ class TestPortfolioManager(unittest.TestCase):
         # VXUS: 61,000 * 0.3 / 50 = 366 shares
         # BND: 61,000 * 0.3 / 80 = 228.75 shares (round down to 228)
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         expected_allocations = [
             {"Ticker": "VTI", "Account": "IRA", "Shares": 200, "Action": "sell"},
@@ -467,8 +515,11 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "VXUS", "Account": "Taxable", "Shares": "80"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("50")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("50"),
+        }
+        self.setup_price_mock(test_prices)
 
         # total portfolio value = 1000 + 60 * 100 + 80 * 50 = 10000
 
@@ -478,9 +529,10 @@ class TestPortfolioManager(unittest.TestCase):
         #
         # No rebalancing needed
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         # Expected: No orders should be generated
         expected_allocations = []
@@ -520,9 +572,12 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": "10"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("50")
-        self.mock_prices["BND"] = Decimal("100")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("50"),
+            "BND": Decimal("100"),
+        }
+        self.setup_price_mock(test_prices)
 
         # Total portfolio value = 1000 + 50*100 + 60*50 + 10*100 = 10000
         # Target allocation:
@@ -530,9 +585,10 @@ class TestPortfolioManager(unittest.TestCase):
         # VXUS: 10000 * 0.3 / 50 = 60 shares (no change, within 5%)
         # BND: 10000 * 0.2 / 100 = 20 shares (100% increase, needs rebalancing)
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         # Expected: Only BND should be rebalanced
         expected_allocations = [
@@ -574,9 +630,12 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": "10"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("100")
-        self.mock_prices["BND"] = Decimal("100")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("100"),
+            "BND": Decimal("100"),
+        }
+        self.setup_price_mock(test_prices)
 
         # Total portfolio value = 1000 + 60*100 + 40*100 + 10*100 = 12000
         # Target allocation:
@@ -584,9 +643,10 @@ class TestPortfolioManager(unittest.TestCase):
         # VXUS: 12000 * 0.4 / 100 = 48 shares (20% increase, needs rebalancing)
         # BND: 12000 * 0.2 / 100 = 24 shares (140% increase, needs rebalancing)
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         # Expected: All positions should be rebalanced
         expected_allocations = [
@@ -630,9 +690,12 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": "28"},  # 6.67% under
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("100")
-        self.mock_prices["BND"] = Decimal("100")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("100"),
+            "BND": Decimal("100"),
+        }
+        self.setup_price_mock(test_prices)
 
         # Total portfolio value = 1000 + 42*100 + 29*100 + 28*100 = 10900
 
@@ -641,9 +704,10 @@ class TestPortfolioManager(unittest.TestCase):
         # VXUS: 10900 * 0.3 / 100 = 32 shares (13.79% increase, needs rebalancing)
         # BND: 10900 * 0.3 / 100 = 32 shares (17.86% increase, needs rebalancing)
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         # Expected: VXUS and BND should be rebalanced
         expected_allocations = [
@@ -693,10 +757,13 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": "20"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("100")
-        self.mock_prices["BND"] = Decimal("100")
-        self.mock_prices["GLD"] = Decimal("100")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("100"),
+            "BND": Decimal("100"),
+            "GLD": Decimal("100"),
+        }
+        self.setup_price_mock(test_prices)
 
         # Total portfolio value = 10000 + 40*100 + 30*100 + 20*100 = 19000
         # Target allocation:
@@ -705,9 +772,10 @@ class TestPortfolioManager(unittest.TestCase):
         # BND: 19000 * 0.2 / 100 = 38 shares (90% increase, needs rebalancing)
         # GLD: 19000 * 0.1 / 100 = 19 shares (new investment, needs buying)
 
-        result = self.manager.rebalance(
+        manager = PortfolioManagerFactory.create_from_data(
             portfolio_weights, accounts, current_allocations
         )
+        result = manager.rebalance()
 
         # Expected: All positions should be rebalanced, including buying the new GLD position
         expected_allocations = [
@@ -719,23 +787,41 @@ class TestPortfolioManager(unittest.TestCase):
 
         self.assertEqual(result, expected_allocations)
 
-
     def test_allocation_with_insufficient_funds(self):
         portfolio_weights = [
-            {"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "0.68", "Asset_Class": "Equity", "Sub_Class": "US"},
-            {"Ticker": "VXUS", "Vol": "0.12", "Cash_Weight": "0.32", "Asset_Class": "Equity", "Sub_Class": "International"},
+            {
+                "Ticker": "VTI",
+                "Vol": "0.1",
+                "Cash_Weight": "0.68",
+                "Asset_Class": "Equity",
+                "Sub_Class": "US",
+            },
+            {
+                "Ticker": "VXUS",
+                "Vol": "0.12",
+                "Cash_Weight": "0.32",
+                "Asset_Class": "Equity",
+                "Sub_Class": "International",
+            },
         ]
         accounts = [
             {"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "100"},
         ]
         current_allocations = [
-            {"Ticker": "VTI", "Account": "Taxable", "Shares": "600"},  # Slightly over-allocated but within 5%
+            {
+                "Ticker": "VTI",
+                "Account": "Taxable",
+                "Shares": "600",
+            },  # Slightly over-allocated but within 5%
             {"Ticker": "VXUS", "Account": "Taxable", "Shares": "250"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("10")
-        self.mock_prices["VXUS"] = Decimal("10")
-    
+        test_prices = {
+            "VTI": Decimal("10"),
+            "VXUS": Decimal("10"),
+        }
+        self.setup_price_mock(test_prices)
+
         # Total portfolio value = 600*10 + 250*10 = 8600
         # Target allocation:
         # VTI: 8600 * 0.68 = 5848 (target value)
@@ -745,7 +831,10 @@ class TestPortfolioManager(unittest.TestCase):
         #     Current value: 250 * 10 = 2500
         #     Need to buy: (2752 - 2500) / 10 = 25 shares
 
-        result = self.manager.rebalance(portfolio_weights, accounts, current_allocations)
+        manager = PortfolioManagerFactory.create_from_data(
+            portfolio_weights, accounts, current_allocations
+        )
+        result = manager.rebalance()
 
         expected_allocations = [
             # Only have cash to buy 10 shares
@@ -753,6 +842,55 @@ class TestPortfolioManager(unittest.TestCase):
         ]
 
         self.assertEqual(result, expected_allocations)
+
+    def test_get_all_tickers(self):
+        portfolio_weights = [
+            {"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "0.6"},
+            {"Ticker": "BND", "Vol": "0.03", "Cash_Weight": "0.4"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "100"},
+            {"Ticker": "VXUS", "Account": "IRA", "Shares": "50"},  # Not in weights
+        ]
+        manager = PortfolioManagerFactory.create_from_data(
+            portfolio_weights, [], current_allocations
+        )
+        all_tickers = manager.get_all_tickers()
+        self.assertEqual(all_tickers, {"VTI", "BND", "VXUS"})
+
+    def test_rebalancing_with_removed_position(self):
+        portfolio_weights = [
+            {"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "1.0"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "50"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": "100"},  # To be removed
+        ]
+        accounts = [{"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "0"}]
+
+        manager = PortfolioManagerFactory.create_from_data(
+            portfolio_weights, accounts, current_allocations
+        )
+        manager.fetch_prices()
+
+        result = manager.rebalance()
+
+        expected_orders = [
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 100, "Action": "sell"},
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 50, "Action": "buy"},
+        ]
+        self.assertEqual(result, expected_orders)
+
+    def test_price_fetch_error(self):
+        self.mock_tickers.return_value.tickers = {
+            "VTI": MagicMock(info={}),  # Missing previousClose
+        }
+        portfolio_weights = [{"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "1.0"}]
+        manager = PortfolioManagerFactory.create_from_data(portfolio_weights, [], [])
+
+        with self.assertRaises(PriceFetchError):
+            manager.fetch_prices()
+
 
 if __name__ == "__main__":
     unittest.main()

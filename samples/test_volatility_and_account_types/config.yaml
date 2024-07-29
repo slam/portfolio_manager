@@ -1,0 +1,3 @@
+portfolio_weights: ./portfolio_weights.csv
+accounts: ./accounts.csv
+current_allocations: ./current_allocations.csv
