@@ -1,0 +1,4 @@
+Ticker,Vol,Cash_Weight,Asset_Class,Sub_Class
+VTI,0.1,0.3,Equity,US
+ARKK,0.4,0.1,Equity,Tech
+BND,0.03,0.6,Bond,US

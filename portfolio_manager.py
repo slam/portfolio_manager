@@ -51,6 +51,12 @@ class DataLoader:
         return data
 
 
+class PriceFetchError(Exception):
+    """Custom exception for price fetching errors."""
+
+    pass
+
+
 class PortfolioManager:
     def __init__(self, portfolio_data):
         self.prices = {}
@@ -60,15 +66,38 @@ class PortfolioManager:
         self.accounts = {a["Account"]: a for a in portfolio_data["accounts"]}
         self.current_allocations = portfolio_data["current_allocations"]
 
-    def get_price(self, ticker):
+    def get_all_tickers(self):
+        weight_tickers = set(self.portfolio_weights.keys())
+        allocation_tickers = {a["Ticker"] for a in self.current_allocations}
+        return weight_tickers.union(allocation_tickers)
+
+    def fetch_prices(self):
+        tickers = self.get_all_tickers()
+        logger.debug(f"Fetching prices for tickers: {tickers}")
+
+        try:
+            yf_tickers = yf.Tickers(" ".join(tickers))
+            for ticker, info in yf_tickers.tickers.items():
+                if "previousClose" in info.info:
+                    self.prices[ticker] = Decimal(str(info.info["previousClose"]))
+                else:
+                    raise PriceFetchError(f"Unable to fetch closing price for {ticker}")
+
+            logger.debug(f"Fetched prices: {self.prices}")
+        except Exception as e:
+            logger.error(f"Error fetching prices: {str(e)}")
+            raise PriceFetchError(
+                "Failed to get accurate price data for one or more tickers"
+            ) from e
+
+    def get_price(self, ticker: str):
         if ticker not in self.prices:
-            self.prices[ticker] = Decimal(
-                str(yf.Ticker(ticker).info["regularMarketPrice"])
-            )
+            raise PriceFetchError(f"Price for {ticker} not available")
         return self.prices[ticker]
 
     def rebalance(self):
         logger.debug("Starting rebalance...")
+        self.fetch_prices()
         self.calculate_current_state()
         self.calculate_target_state()
         self.apply_rebalance_threshold()
