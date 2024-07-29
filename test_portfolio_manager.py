@@ -6,7 +6,7 @@ from portfolio_manager import PortfolioManagerFactory
 
 class TestPortfolioManager(unittest.TestCase):
     def setUp(self):
-        self.mock_prices = {
+        self.default_prices = {
             "VTI": Decimal("100.00"),
             "VXUS": Decimal("50.00"),
             "BND": Decimal("80.00"),
@@ -15,14 +15,16 @@ class TestPortfolioManager(unittest.TestCase):
             "GLD": Decimal("150.00"),
         }
 
-        self.patcher = patch("portfolio_manager.yf.Ticker")
-        self.mock_ticker = self.patcher.start()
-        self.mock_ticker.side_effect = lambda symbol: MagicMock(
-            info={"regularMarketPrice": self.mock_prices[symbol]}
-        )
+        self.setup_price_mock(self.default_prices)
 
-    def tearDown(self):
-        self.patcher.stop()
+    def setup_price_mock(self, prices):
+        patcher = patch("yfinance.Tickers")
+        self.mock_tickers = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.mock_tickers.return_value.tickers = {
+            ticker: MagicMock(info={"previousClose": float(price)})
+            for ticker, price in prices.items()
+        }
 
     def test_file_based_initialization(self):
         with patch("portfolio_manager.DataLoader.load_from_config") as mock_load:
@@ -513,8 +515,11 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "VXUS", "Account": "Taxable", "Shares": "80"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("50")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("50"),
+        }
+        self.setup_price_mock(test_prices)
 
         # total portfolio value = 1000 + 60 * 100 + 80 * 50 = 10000
 
@@ -567,9 +572,12 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": "10"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("50")
-        self.mock_prices["BND"] = Decimal("100")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("50"),
+            "BND": Decimal("100"),
+        }
+        self.setup_price_mock(test_prices)
 
         # Total portfolio value = 1000 + 50*100 + 60*50 + 10*100 = 10000
         # Target allocation:
@@ -622,9 +630,12 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": "10"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("100")
-        self.mock_prices["BND"] = Decimal("100")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("100"),
+            "BND": Decimal("100"),
+        }
+        self.setup_price_mock(test_prices)
 
         # Total portfolio value = 1000 + 60*100 + 40*100 + 10*100 = 12000
         # Target allocation:
@@ -679,9 +690,12 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": "28"},  # 6.67% under
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("100")
-        self.mock_prices["BND"] = Decimal("100")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("100"),
+            "BND": Decimal("100"),
+        }
+        self.setup_price_mock(test_prices)
 
         # Total portfolio value = 1000 + 42*100 + 29*100 + 28*100 = 10900
 
@@ -743,10 +757,13 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "BND", "Account": "Taxable", "Shares": "20"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("100")
-        self.mock_prices["VXUS"] = Decimal("100")
-        self.mock_prices["BND"] = Decimal("100")
-        self.mock_prices["GLD"] = Decimal("100")
+        test_prices = {
+            "VTI": Decimal("100"),
+            "VXUS": Decimal("100"),
+            "BND": Decimal("100"),
+            "GLD": Decimal("100"),
+        }
+        self.setup_price_mock(test_prices)
 
         # Total portfolio value = 10000 + 40*100 + 30*100 + 20*100 = 19000
         # Target allocation:
@@ -799,8 +816,11 @@ class TestPortfolioManager(unittest.TestCase):
             {"Ticker": "VXUS", "Account": "Taxable", "Shares": "250"},
         ]
 
-        self.mock_prices["VTI"] = Decimal("10")
-        self.mock_prices["VXUS"] = Decimal("10")
+        test_prices = {
+            "VTI": Decimal("10"),
+            "VXUS": Decimal("10"),
+        }
+        self.setup_price_mock(test_prices)
 
         # Total portfolio value = 600*10 + 250*10 = 8600
         # Target allocation:
