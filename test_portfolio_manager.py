@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from decimal import Decimal
-from portfolio_manager import PortfolioManagerFactory
+from portfolio_manager import PortfolioManagerFactory, PriceFetchError
 
 
 class TestPortfolioManager(unittest.TestCase):
@@ -842,6 +842,54 @@ class TestPortfolioManager(unittest.TestCase):
         ]
 
         self.assertEqual(result, expected_allocations)
+
+    def test_get_all_tickers(self):
+        portfolio_weights = [
+            {"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "0.6"},
+            {"Ticker": "BND", "Vol": "0.03", "Cash_Weight": "0.4"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "100"},
+            {"Ticker": "VXUS", "Account": "IRA", "Shares": "50"},  # Not in weights
+        ]
+        manager = PortfolioManagerFactory.create_from_data(
+            portfolio_weights, [], current_allocations
+        )
+        all_tickers = manager.get_all_tickers()
+        self.assertEqual(all_tickers, {"VTI", "BND", "VXUS"})
+
+    def test_rebalancing_with_removed_position(self):
+        portfolio_weights = [
+            {"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "1.0"},
+        ]
+        current_allocations = [
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": "50"},
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": "100"},  # To be removed
+        ]
+        accounts = [{"Account": "Taxable", "Type": "Taxable", "Idle_Cash": "0"}]
+
+        manager = PortfolioManagerFactory.create_from_data(
+            portfolio_weights, accounts, current_allocations
+        )
+        manager.fetch_prices()
+
+        result = manager.rebalance()
+
+        expected_orders = [
+            {"Ticker": "VXUS", "Account": "Taxable", "Shares": 100, "Action": "sell"},
+            {"Ticker": "VTI", "Account": "Taxable", "Shares": 50, "Action": "buy"},
+        ]
+        self.assertEqual(result, expected_orders)
+
+    def test_price_fetch_error(self):
+        self.mock_tickers.return_value.tickers = {
+            "VTI": MagicMock(info={}),  # Missing previousClose
+        }
+        portfolio_weights = [{"Ticker": "VTI", "Vol": "0.1", "Cash_Weight": "1.0"}]
+        manager = PortfolioManagerFactory.create_from_data(portfolio_weights, [], [])
+
+        with self.assertRaises(PriceFetchError):
+            manager.fetch_prices()
 
 
 if __name__ == "__main__":
