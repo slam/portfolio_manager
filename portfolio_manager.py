@@ -5,9 +5,14 @@ import logging
 import yaml
 import csv
 import os
-import sys
+import argparse
 
-logging.basicConfig(level=logging.DEBUG)
+
+def configure_logging(debug=False):
+    level = logging.DEBUG if debug else logging.INFO
+    logging.basicConfig(level=level, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -357,12 +362,16 @@ class PortfolioManagerFactory:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
-    else:
-        config_path = "./config.yaml"
+    parser = argparse.ArgumentParser(description="Portfolio Manager")
+    parser.add_argument(
+        "--config", default="./config.yaml", help="Path to the configuration file"
+    )
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    args = parser.parse_args()
 
-    manager = PortfolioManagerFactory.create_from_config(config_path)
+    configure_logging(args.debug)
+
+    manager = PortfolioManagerFactory.create_from_config(args.config)
     rebalance_orders = manager.rebalance()
     print("Rebalance orders:")
     for order in rebalance_orders:
